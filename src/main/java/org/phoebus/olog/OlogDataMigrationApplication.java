@@ -1,6 +1,7 @@
 package org.phoebus.olog;
 
 import java.io.IOException;
+import java.util.ServiceLoader;
 import java.util.logging.Logger;
 
 import org.springframework.boot.CommandLineRunner;
@@ -15,6 +16,7 @@ import org.springframework.context.annotation.ComponentScan;
 public class OlogDataMigrationApplication implements CommandLineRunner {
     static final Logger logger = Logger.getLogger("Olog-Migration");
 
+    private static ServiceLoader<LogRetrieval> loader;
     
     public static void main(String[] args) throws IOException
     {
@@ -33,8 +35,13 @@ public class OlogDataMigrationApplication implements CommandLineRunner {
     public void run(String... args) throws Exception {
         OlogMigrationService service = getOlogMigrationService();
         service.hello();
-        service.update();
-
+        
+        // Find the Log Retrieval implementations
+        loader = ServiceLoader.load(LogRetrieval.class);
+        loader.stream().forEach(logRetrieval -> {
+            logRetrieval.get().retrieveTags();
+        });
+        
     }
 
 }
