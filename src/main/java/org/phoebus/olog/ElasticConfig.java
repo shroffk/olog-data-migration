@@ -101,6 +101,7 @@ public class ElasticConfig
      * @param indexClient the elastic client instance used to validate and create
      *                    olog indices
      */
+    @SuppressWarnings({ "deprecation", "unchecked" })
     private synchronized void elasticIndexValidation(RestHighLevelClient indexClient)
     {
         // Create/migrate the tag index
@@ -148,7 +149,6 @@ public class ElasticConfig
                 CreateIndexRequest createRequest = new CreateIndexRequest(ES_PROPERTY_INDEX);
                 ObjectMapper mapper = new ObjectMapper();
                 InputStream is = ElasticConfig.class.getResourceAsStream("/property_mapping.json");
-
                 Map<String, String> jsonMap = mapper.readValue(is, Map.class);
                 createRequest.mapping(ES_PROPERTY_TYPE, jsonMap);
 

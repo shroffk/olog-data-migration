@@ -44,16 +44,16 @@ public class OlogDataMigrationApplication implements CommandLineRunner {
         loader = ServiceLoader.load(LogRetrieval.class);
         loader.stream().forEach(logRetrieval -> {
             List<Tag> tags = logRetrieval.get().retrieveTags();
-            service.transferTags(tags);
-            logger.info("Completed transfer for " + tags.size() + " tags");
+            List<Tag> transferredTags = service.transferTags(tags);
+            logger.info("Completed transfer for " + transferredTags.size() + " tags");
 
             List<Logbook> logbooks = logRetrieval.get().retrieveLogbooks();
-            service.transferLogbooks(logbooks);
-            logger.info("Completed transfer for " + logbooks.size() + " logbooks");
+            List<Logbook> transferredLogbooks = service.transferLogbooks(logbooks);
+            logger.info("Completed transfer for " + transferredLogbooks.size() + " logbooks");
 
             List<Property> properties = logRetrieval.get().retrieveProperties();
-            service.transferProperties(properties);
-            logger.info("Completed transfer for " + properties.size() + " properties");
+            List<Property> transferredProperties = service.transferProperties(properties);
+            logger.info("Completed transfer for " + transferredProperties.size() + " properties");
         });
         
     }
