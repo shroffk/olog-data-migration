@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.ServiceLoader;
 import java.util.logging.Logger;
 
+import org.phoebus.olog.entity.Log;
 import org.phoebus.olog.entity.Logbook;
 import org.phoebus.olog.entity.Property;
 import org.phoebus.olog.entity.Tag;
@@ -58,6 +59,20 @@ public class OlogDataMigrationApplication implements CommandLineRunner
             List<Property> transferredProperties = service.transferProperties(properties);
             logger.info("Completed transfer for " + transferredProperties.size() + " properties");
 
+            int logCount = logRetrieval.get().retireveLogCount();
+            logger.info("Total number of logs to be transferred = " + logCount);
+            
+            int size = 100;
+            int page = 1;
+            
+            List<Log> logs = logRetrieval.get().retrieveLogs(size, page);
+            while (!logs.isEmpty())
+            {
+                service.transferLogs(logs);
+                page = page++;
+                logs = logRetrieval.get().retrieveLogs(size, page);
+                
+            }
         });
 
     }

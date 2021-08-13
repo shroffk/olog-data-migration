@@ -22,7 +22,8 @@ public interface LogRetrieval
 
     public List<Logbook> retrieveLogbooks();
 
-    // TODO this needs to be converted to a stream
-    public List<Log> retrieveLogs(double size, double from);
+    public List<Log> retrieveLogs(double size, double page);
+
+    int retireveLogCount();
 
 }

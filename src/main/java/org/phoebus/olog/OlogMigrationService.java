@@ -3,27 +3,48 @@ package org.phoebus.olog;
 import static org.phoebus.olog.OlogDataMigrationApplication.logger;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.apache.http.HttpHost;
+import org.bson.BsonString;
+import org.bson.Document;
+import org.bson.types.ObjectId;
+import org.elasticsearch.action.DocWriteResponse.Result;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkResponse;
+import org.elasticsearch.action.get.GetRequest;
 import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.support.WriteRequest;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.xcontent.XContentType;
+import org.phoebus.olog.entity.Attachment;
+import org.phoebus.olog.entity.Log;
 import org.phoebus.olog.entity.Logbook;
 import org.phoebus.olog.entity.Property;
 import org.phoebus.olog.entity.Tag;
+import org.phoebus.olog.entity.Log.LogBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.mongodb.gridfs.GridFsOperations;
+import org.springframework.data.mongodb.gridfs.GridFsTemplate;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mongodb.client.gridfs.GridFSBucket;
+import com.mongodb.client.gridfs.model.GridFSUploadOptions;
 
 public class OlogMigrationService
 {
@@ -44,6 +65,10 @@ public class OlogMigrationService
     private String ES_PROPERTY_INDEX;
     @Value("${elasticsearch.property.type:olog_property}")
     private String ES_PROPERTY_TYPE;
+    @Value("${elasticsearch.log.index:olog_logs}")
+    private String ES_LOG_INDEX;
+    @Value("${elasticsearch.log.type:olog_log}")
+    private String ES_LOG_TYPE;
 
     @Autowired
     @Qualifier("indexClient")
@@ -200,8 +225,76 @@ public class OlogMigrationService
         return null;
     }
 
-    public void transferLogs()
+    public List<Log> transferLogs(List<Log> logs)
     {
 
+        ArrayList<Log> transferredLogs = new ArrayList<Log>();
+        for (Log log : logs)
+        {
+            try
+            {
+                Long id = generator.getID();
+                LogBuilder validatedLog = LogBuilder.createLog(log).id(id).createDate(Instant.now());
+                if (log.getAttachments() != null && !log.getAttachments().isEmpty())
+                {
+                    Set<Attachment> createdAttachments = new HashSet<Attachment>();
+                    log.getAttachments().stream().filter(attachment -> {
+                        return attachment.getAttachment() != null;
+                    }).forEach(attachment -> {
+                        createdAttachments.add(saveAttachment(attachment));
+                    });
+                    validatedLog = validatedLog.setAttachments(createdAttachments);
+                }
+
+                IndexRequest indexRequest = new IndexRequest(ES_LOG_INDEX, ES_LOG_TYPE, String.valueOf(id))
+                        .source(mapper.writeValueAsBytes(validatedLog.build()), XContentType.JSON)
+                        .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+                IndexResponse response = client.index(indexRequest, RequestOptions.DEFAULT);
+
+                if (response.getResult().equals(Result.CREATED))
+                {
+                    BytesReference ref = client
+                            .get(new GetRequest(ES_LOG_INDEX, ES_LOG_TYPE, response.getId()), RequestOptions.DEFAULT)
+                            .getSourceAsBytesRef();
+
+                    Log createdLog = mapper.readValue(ref.streamInput(), Log.class);
+                    transferredLogs.add(createdLog);
+                }
+            } catch (Exception e)
+            {
+                logger.log(Level.SEVERE, e.getMessage(), e);
+            }
+        }
+        return transferredLogs;
+    }
+    
+    @Autowired
+    private GridFsTemplate gridFsTemplate;
+    @Autowired
+    private GridFsOperations gridOperation;
+    @Autowired
+    private GridFSBucket gridFSBucket;
+
+    public Attachment saveAttachment(Attachment entity)
+    {
+        try
+        {
+            GridFSUploadOptions options = new GridFSUploadOptions()
+                    .metadata(new Document("meta-data", entity.getFileMetadataDescription()));
+            if(entity.getId() != null && !entity.getId().isEmpty()){
+                BsonString id = new BsonString(entity.getId());
+                gridFSBucket.uploadFromStream(id, entity.getFilename(), entity.getAttachment().getInputStream(), options);
+            }
+            else{
+                ObjectId objectId = gridFSBucket.uploadFromStream(entity.getFilename(), entity.getAttachment().getInputStream(), options);
+                entity.setId(objectId.toString());
+            }
+            return entity;
+        } catch (IOException e)
+        {
+            logger.log(Level.WARNING, String.format("Unable to persist attachment %s", entity.getFilename()), e);
+        }
+        return null;
     }
 }
