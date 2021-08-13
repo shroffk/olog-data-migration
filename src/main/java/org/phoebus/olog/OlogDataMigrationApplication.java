@@ -1,9 +1,13 @@
 package org.phoebus.olog;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.ServiceLoader;
 import java.util.logging.Logger;
 
+import org.phoebus.olog.entity.Logbook;
+import org.phoebus.olog.entity.Property;
+import org.phoebus.olog.entity.Tag;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -34,12 +38,22 @@ public class OlogDataMigrationApplication implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         OlogMigrationService service = getOlogMigrationService();
-        service.hello();
+        service.status();
         
         // Find the Log Retrieval implementations
         loader = ServiceLoader.load(LogRetrieval.class);
         loader.stream().forEach(logRetrieval -> {
-            logRetrieval.get().retrieveTags();
+            List<Tag> tags = logRetrieval.get().retrieveTags();
+            service.transferTags(tags);
+            logger.info("Completed transfer for " + tags.size() + " tags");
+
+            List<Logbook> logbooks = logRetrieval.get().retrieveLogbooks();
+            service.transferLogbooks(logbooks);
+            logger.info("Completed transfer for " + logbooks.size() + " logbooks");
+
+            List<Property> properties = logRetrieval.get().retrieveProperties();
+            service.transferProperties(properties);
+            logger.info("Completed transfer for " + properties.size() + " properties");
         });
         
     }

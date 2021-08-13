@@ -2,14 +2,17 @@ package org.phoebus.old.olog;
 
 import java.net.URI;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.UriBuilder;
 
 import org.phoebus.olog.LogRetrieval;
+import org.phoebus.olog.entity.Attribute;
 import org.phoebus.olog.entity.Log;
 import org.phoebus.olog.entity.Logbook;
 import org.phoebus.olog.entity.Property;
+import org.phoebus.olog.entity.State;
 import org.phoebus.olog.entity.Tag;
 
 import com.sun.jersey.api.client.Client;
@@ -37,19 +40,31 @@ public class OldOlogLogRetrieval implements LogRetrieval
     public List<Tag> retrieveTags()
     {
         XmlTags allXmlTags = service.path("Olog/resources/tags").accept(MediaType.APPLICATION_XML).get(XmlTags.class);
-        return null;
+        return allXmlTags.getTags().stream().map((xmlTag)->{
+            return new Tag(xmlTag.getName(), xmlTag.getState().equalsIgnoreCase("Active")? State.Active: State.Inactive);
+        }).collect(Collectors.toList());
     }
 
     @Override
     public List<Logbook> retrieveLogbooks()
     {
-        return null;
+        XmlLogbooks allXmlLogbooks = service.path("Olog/resources/logbooks").accept(MediaType.APPLICATION_XML).get(XmlLogbooks.class);
+        return allXmlLogbooks.getLogbooks().stream().map((xmlLogbook)->{
+            return new Logbook(xmlLogbook.getName(), xmlLogbook.getOwner());
+        }).collect(Collectors.toList());
     }
 
     @Override
     public List<Property> retrieveProperties()
     {
-        return null;
+        XmlProperties allXmlProperties = service.path("Olog/resources/properties").accept(MediaType.APPLICATION_XML).get(XmlProperties.class);
+        return allXmlProperties.getProperties().stream().map((xmlProperty) -> {
+            Property property = new Property(xmlProperty.getName());
+            property.addAttributes(xmlProperty.getAttributes().entrySet().stream().map((xmlAttribute) -> {
+                return new Attribute(xmlAttribute.getKey());
+            }).collect(Collectors.toSet()));
+            return property;
+        } ).collect(Collectors.toList());
     }
 
     @Override
