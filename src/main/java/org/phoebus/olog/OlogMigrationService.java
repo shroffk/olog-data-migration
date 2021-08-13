@@ -45,11 +45,9 @@ public class OlogMigrationService
     @Value("${elasticsearch.property.type:olog_property}")
     private String ES_PROPERTY_TYPE;
 
-
     @Autowired
     @Qualifier("indexClient")
     RestHighLevelClient client;
-
 
     public void status()
     {

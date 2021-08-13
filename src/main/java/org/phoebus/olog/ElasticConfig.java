@@ -182,7 +182,8 @@ public class ElasticConfig
         // create/migrate log template
         try
         {
-            GetIndexTemplatesResponse templates = indexClient.indices().getIndexTemplate(new GetIndexTemplatesRequest("*"), RequestOptions.DEFAULT);
+            GetIndexTemplatesResponse templates = indexClient.indices()
+                    .getIndexTemplate(new GetIndexTemplatesRequest("*"), RequestOptions.DEFAULT);
             if (!templates.getIndexTemplates().stream().anyMatch(i -> {
                 return i.name().equalsIgnoreCase(ES_LOG_INDEX + "_template");
             }))
@@ -201,7 +202,8 @@ public class ElasticConfig
             }
 
             // Get the index templates again...
-            templates = indexClient.indices().getIndexTemplate(new GetIndexTemplatesRequest("*"), RequestOptions.DEFAULT);
+            templates = indexClient.indices().getIndexTemplate(new GetIndexTemplatesRequest("*"),
+                    RequestOptions.DEFAULT);
 
             if (templates.getIndexTemplates().stream().anyMatch(i -> {
                 return i.name().equalsIgnoreCase(ES_LOG_INDEX + "_template") && i.version() == null;

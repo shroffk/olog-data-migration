@@ -17,11 +17,12 @@ import org.springframework.context.annotation.ComponentScan;
 
 @SpringBootApplication
 @ComponentScan(basePackages = { "org.phoebus.olog" })
-public class OlogDataMigrationApplication implements CommandLineRunner {
+public class OlogDataMigrationApplication implements CommandLineRunner
+{
     static final Logger logger = Logger.getLogger("Olog-Migration");
 
     private static ServiceLoader<LogRetrieval> loader;
-    
+
     public static void main(String[] args) throws IOException
     {
         logger.info("Starting Olog Service");
@@ -31,15 +32,17 @@ public class OlogDataMigrationApplication implements CommandLineRunner {
     }
 
     @Bean
-    public OlogMigrationService getOlogMigrationService(){
+    public OlogMigrationService getOlogMigrationService()
+    {
         return new OlogMigrationService();
     }
 
     @Override
-    public void run(String... args) throws Exception {
+    public void run(String... args) throws Exception
+    {
         OlogMigrationService service = getOlogMigrationService();
         service.status();
-        
+
         // Find the Log Retrieval implementations
         loader = ServiceLoader.load(LogRetrieval.class);
         loader.stream().forEach(logRetrieval -> {
@@ -54,8 +57,9 @@ public class OlogDataMigrationApplication implements CommandLineRunner {
             List<Property> properties = logRetrieval.get().retrieveProperties();
             List<Property> transferredProperties = service.transferProperties(properties);
             logger.info("Completed transfer for " + transferredProperties.size() + " properties");
+
         });
-        
+
     }
 
 }

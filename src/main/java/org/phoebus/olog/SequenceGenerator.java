@@ -72,7 +72,8 @@ public class SequenceGenerator
         // Create/migrate the sequence index
         try
         {
-            AcknowledgedResponse response = indexClient.indices().delete(new DeleteIndexRequest(ES_SEQUENCE_INDEX), RequestOptions.DEFAULT);
+            AcknowledgedResponse response = indexClient.indices().delete(new DeleteIndexRequest(ES_SEQUENCE_INDEX),
+                    RequestOptions.DEFAULT);
             CreateIndexRequest createRequest = new CreateIndexRequest(ES_SEQUENCE_INDEX);
             createRequest
                     .settings(Settings.builder().put("index.number_of_shards", 1).put("auto_expand_replicas", "0-all"));
