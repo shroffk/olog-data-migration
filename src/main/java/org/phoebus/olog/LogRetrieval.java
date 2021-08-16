@@ -22,7 +22,7 @@ public interface LogRetrieval
 
     public List<Logbook> retrieveLogbooks();
 
-    public List<Log> retrieveLogs(double size, double page);
+    public List<Log> retrieveLogs(int size, int page);
 
     int retireveLogCount();
 

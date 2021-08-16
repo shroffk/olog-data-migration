@@ -2,6 +2,7 @@ package org.phoebus.old.olog;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -18,6 +19,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 import org.phoebus.olog.LogRetrieval;
+import org.phoebus.olog.entity.Attachment;
 import org.phoebus.olog.entity.Attribute;
 import org.phoebus.olog.entity.Log;
 import org.phoebus.olog.entity.Log.LogBuilder;
@@ -25,12 +27,14 @@ import org.phoebus.olog.entity.Logbook;
 import org.phoebus.olog.entity.Property;
 import org.phoebus.olog.entity.State;
 import org.phoebus.olog.entity.Tag;
+import org.springframework.core.io.InputStreamResource;
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.xml.sax.SAXException;
 
 import com.sun.jersey.api.client.Client;
+import com.sun.jersey.api.client.ClientResponse;
 import com.sun.jersey.api.client.WebResource;
 import com.sun.jersey.api.client.config.DefaultClientConfig;
 import com.sun.jersey.core.util.MultivaluedMapImpl;
@@ -110,28 +114,43 @@ public class OldOlogLogRetrieval implements LogRetrieval
     }
 
     @Override
-    public List<Log> retrieveLogs(double size, double page)
+    public List<Log> retrieveLogs(int size, int page)
     {
 
         // Since olog return the log in reverse order in order to get them in the order
         // of ascending
         // id's we need to reverse map them.
         int count = retireveLogCount();
-        double mappedPage = Math.ceil(count / size) + 1 - page;
+        int mappedPage = ((int)Math.ceil((float)count/(float)size)) + 1 - page;
 
         final MultivaluedMap<String, String> map = new MultivaluedMapImpl();
         map.add("limit", String.valueOf(size));
         map.add("page", String.valueOf(mappedPage));
-        XmlLogs xmlLogs = service.path("logs").queryParams(map).accept(MediaType.APPLICATION_XML)
+        XmlLogs xmlLogs = service.path("Olog/resources/logs").queryParams(map).accept(MediaType.APPLICATION_XML)
                 .accept(MediaType.APPLICATION_JSON).get(XmlLogs.class);
 
         List<Log> logs = new ArrayList<Log>();
         logs = xmlLogs.getLogs().stream().map((xmlLog) -> {
             LogBuilder log = Log.LogBuilder.createLog(xmlLog.getDescription());
+            log.id(xmlLog.getId());
             if (xmlLog.getLevel() != null && !xmlLog.getLevel().isBlank())
                 log.level(xmlLog.getLevel());
             if (xmlLog.getCreatedDate() != null)
                 log.createDate(xmlLog.getCreatedDate().toInstant());
+            if (xmlLog.getOwner() != null)
+                log.owner(xmlLog.getOwner());
+
+            // map attachments
+            if (xmlLog.getXmlAttachments() != null && !xmlLog.getXmlAttachments().getAttachments().isEmpty())
+            {
+                log.setAttachments(xmlLog.getXmlAttachments().getAttachments().stream().map((xmlAttachment) -> {
+
+                    ClientResponse response = service.path("Olog/resources/attachments").path(xmlLog.getId().toString())
+                            .path(xmlAttachment.getFileName()).get(ClientResponse.class);
+                    return new Attachment(new InputStreamResource(response.getEntity(InputStream.class)),
+                            xmlAttachment.getFileName(), xmlAttachment.getContentType());
+                }).collect(Collectors.toSet()));
+            }
 
             // map the logbooks
             if (xmlLog.getXmlLogbooks() != null && !xmlLog.getXmlLogbooks().isEmpty())

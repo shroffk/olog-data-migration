@@ -65,14 +65,16 @@ public class OlogDataMigrationApplication implements CommandLineRunner
             int size = 100;
             int page = 1;
             
+            long start = System.currentTimeMillis();
             List<Log> logs = logRetrieval.get().retrieveLogs(size, page);
             while (!logs.isEmpty())
             {
                 service.transferLogs(logs);
-                page = page++;
+                logger.info("Completed transferring page: " + page);
+                page++;
                 logs = logRetrieval.get().retrieveLogs(size, page);
-                
             }
+            logger.info("Completed transferring " + logCount + " in " + (System.currentTimeMillis() - start) + "ms");
         });
 
     }
