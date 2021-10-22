@@ -8,7 +8,7 @@ migration of data to the new Phoebus Olog service
 
 ### Run
 
-`java -jar target/olog-data-migration-2.0.0.jar`
+`java -jar target/olog-data-migration-2.0.0-spring-boot.jar`
 
 
 ## Data Migration
