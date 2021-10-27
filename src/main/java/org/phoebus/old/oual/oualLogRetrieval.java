@@ -35,19 +35,18 @@ import com.sun.jersey.multipart.impl.MultiPartWriter;
 import com.sun.jersey.api.client.WebResource;
 import javax.ws.rs.core.UriBuilder;
 
-
 @SpringBootApplication
 @RestController
 public class oualLogRetrieval implements LogRetrieval {
 
     private final WebResource service;
     private URI ologURI;
+    String myDriver = "org.mariadb.jdbc.Driver";
     String myUrl = "jdbc:mariadb://localhost/logbook";
     String myUser = "edwards";
     String myPassword = "Edwards";
 
-    public oualLogRetrieval()
-    {
+    public oualLogRetrieval() {
         this.ologURI = URI.create("http://localhost:48080");
 
         DefaultClientConfig clientConfig = new DefaultClientConfig();
@@ -57,18 +56,41 @@ public class oualLogRetrieval implements LogRetrieval {
         service = client.resource(UriBuilder.fromUri(ologURI).build());
     }
 
-	public static void main(String[] args) {
-		SpringApplication.run(oualLogRetrieval.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(oualLogRetrieval.class, args);
+    }
 
-	@GetMapping("/hello")
-	public String hello(@RequestParam(value = "name", defaultValue = "World") String name) {
-		return String.format("Hello %s!", name);
-	}
+    @GetMapping("/hello")
+    public String hello(@RequestParam(value = "name", defaultValue = "World") String name) {
+        return String.format("Hello %s!", name);
+    }
 
-	@GetMapping("/logbook")
-    public String fetchData(String[] args) {
-		String returnStuff = new String();
+    // public class FetchLog {
+    // private String userName;
+    // private String logMessage;
+    // private Date dateCreated;
+    // private String ipAddr;
+    // private String privateEntryFlag;
+    // try {
+    // Class.forName(myDriver);
+    // Connection conn = DriverManager.getConnection(myUrl, myUser, myPassword);
+    // String query = "SELECT name, message, when_posted, ipaddr, private from
+    // logbook ORDER BY when_posted ASC LIMIT 1";
+    // Statement st = conn.createStatement();
+    // ResultSet rs = st.executeQuery(query);
+    // this.userName = rs.getString("name");
+    // this.dateCreated = rs.getDate("when_posted");
+    // this.ipAddr = rs.getString("ipaddr");
+    // } catch (Exception e) {
+    // System.err.println("Got an exception! ");
+    // System.err.println(e.getMessage());
+    // }
+    // }
+
+    // This chunk of code exists for testing purposes.
+    @GetMapping("/logbook")
+    public String fetchData() {
+        String returnStuff = new String();
         try {
             // create our mysql database connection
             String myDriver = "org.mariadb.jdbc.Driver";
@@ -93,31 +115,31 @@ public class oualLogRetrieval implements LogRetrieval {
                 String priv = rs.getString("private");
 
                 // print the results
-                System.out.println(name);
-                System.out.println(message);
-                System.out.println(dateCreated);
-                System.out.println(ipAddr);
-                System.out.println(priv);
-				returnStuff = name + message;
+                // System.out.println(name);
+                // System.out.println(message);
+                // System.out.println(dateCreated);
+                // System.out.println(ipAddr);
+                // System.out.println(priv);
+                returnStuff = name + message;
             }
             st.close();
         } catch (Exception e) {
             System.err.println("Got an exception! ");
             System.err.println(e.getMessage());
         }
-		return returnStuff;
+        return returnStuff;
     }
 
     @Override
-    public List<Tag> retrieveTags()
-    {
+    public List<Tag> retrieveTags() {
         List<Tag> allTags = new ArrayList<Tag>();
         LocalDateTime currentDate = new LocalDateTime();
         allTags.add(new Tag("importedData" + currentDate.toString()));
         return allTags;
     }
+
     @Override
-    public int retireveLogCount(){
+    public int retireveLogCount() {
         try {
             // create our mysql database connection
             Class.forName("getLogCount");
@@ -126,36 +148,61 @@ public class oualLogRetrieval implements LogRetrieval {
             Statement countStatement = getCount.createStatement();
             ResultSet countResults = countStatement.executeQuery(countQuery);
             countStatement.close();
-        } catch (Exception e){
+        } catch (Exception e) {
             System.err.println("Got an exception! ");
             System.err.println(e.getMessage());
         }
         return 0;
     }
+
     @Override
-    public List<Property> retrieveProperties(){
+    public List<Property> retrieveProperties() {
         List<Property> myProperty = new ArrayList<Property>();
         myProperty.add(new Property());
         return myProperty;
     }
+
     @Override
-    public List<Logbook> retrieveLogbooks(){
+    public List<Logbook> retrieveLogbooks() {
         List<Logbook> myLogbook = new ArrayList<Logbook>();
         myLogbook.add(new Logbook("jeoLogbook", null));
         return myLogbook;
     }
-    
+
+    @GetMapping("/OUAL")
     @Override
-    public List<Log> retrieveLogs(int size, int page){
-        String name = "User Name";
-        String message = "Message";
+    public List<Log> retrieveLogs(int size, int page) {
+        String name = "noName";
+        String logMessage = "NoMessage";
+        String ipAddr = "NoIP";
+        Boolean isPrivate = false;
         Instant originalDate = Instant.now();
         List<Log> someLogs = new ArrayList<Log>();
-        LogBuilder log = Log.LogBuilder.createLog(message);
-        log.owner(name);
-        log.createDate(originalDate);
+        LogBuilder log = Log.LogBuilder.createLog();
+
+        try {
+            Class.forName(myDriver);
+            Connection conn = DriverManager.getConnection(myUrl, myUser, myPassword);
+            String query = "SELECT name, message, when_posted, ipaddr, private from logbook ORDER BY when_posted ASC LIMIT 1";
+            Statement st = conn.createStatement();
+            ResultSet rs = st.executeQuery(query);
+            while(rs.next()){
+                log.owner(rs.getString("name"));
+                log.description(rs.getString("message"));
+                log.createDate(rs.getDate("when_posted").toInstant());
+                ipAddr = rs.getString("ipaddr");
+                isPrivate = rs.getBoolean("private");
+            } 
+            st.close;
+        }
+        catch (Exception e) {
+            System.err.println("Got an exception! Also, this message sucks.");
+            System.err.println(e.getMessage());
+        }
+    }
         System.out.println(log);
-        
+        System.out.println(name);
+
         return someLogs;
     }
 }
