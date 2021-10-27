@@ -28,6 +28,8 @@ import java.sql.*;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 import com.sun.jersey.api.client.config.DefaultClientConfig;
 import java.net.URI;
 import com.sun.jersey.api.client.Client;
@@ -172,37 +174,49 @@ public class oualLogRetrieval implements LogRetrieval {
     @GetMapping("/OUAL")
     @Override
     public List<Log> retrieveLogs(int size, int page) {
-        String name = "noName";
-        String logMessage = "NoMessage";
-        String ipAddr = "NoIP";
-        Boolean isPrivate = false;
-        Instant originalDate = Instant.now();
+        // String name = "noName";
+        // String logMessage = "NoMessage";
+        // String ipAddr = "NoIP";
+        // Boolean isPrivate = false;
+        // Instant originalDate = Instant.now();
         List<Log> someLogs = new ArrayList<Log>();
-
 
         try {
             Class.forName(myDriver);
             Connection conn = DriverManager.getConnection(myUrl, myUser, myPassword);
-            String query = "SELECT name, message, when_posted, ipaddr, private from logbook ORDER BY when_posted ASC LIMIT 1";
+            String query = "SELECT name, message, when_posted, ipaddr, private from logbook ORDER BY when_posted ASC LIMIT 2";
             Statement st = conn.createStatement();
             ResultSet rs = st.executeQuery(query);
+            Attribute ipAddress;
+            Attribute isPrivate;
             while(rs.next()) {
                 LogBuilder log = Log.LogBuilder.createLog();
+                Property allProperties = new Property();
+                Set<Property> something = new HashSet<Property>();
                 log.owner(rs.getString("name"));
                 log.description(rs.getString("message"));
-                log.createDate(rs.getDate("when_posted").toInstant());
-                ipAddr = rs.getString("ipaddr");
-                isPrivate = rs.getBoolean("private");
-                return log.build();
-            } 
+                log.createDate(rs.getTimestamp("when_posted").toInstant());
+                log.withLogbook(new Logbook("jeoLogbook", null));
+                ipAddress = new Attribute("IP Address", rs.getString("ipaddr"));
+                isPrivate = new Attribute("Is Private", rs.getString("private"));
+                allProperties.addAttributes(ipAddress);
+                allProperties.addAttributes(isPrivate);
+                something.add(allProperties);
+                log.setProperties(something);
+                someLogs.add(log.build());
+                System.out.println(rs.getString("name"));
+            }
             st.close();
         }
         catch (Exception e) {
             System.err.println("Got an exception! Also, this message sucks.");
             System.err.println(e.getMessage());
         }
+        finally {
+            
+        }
         System.out.println(someLogs);
-        System.out.println(name);
+        // System.out.println(name);
 
         return someLogs;
     }
