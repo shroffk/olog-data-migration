@@ -62,76 +62,6 @@ public class oualLogRetrieval implements LogRetrieval {
         SpringApplication.run(oualLogRetrieval.class, args);
     }
 
-    @GetMapping("/hello")
-    public String hello(@RequestParam(value = "name", defaultValue = "World") String name) {
-        return String.format("Hello %s!", name);
-    }
-
-    // public class FetchLog {
-    // private String userName;
-    // private String logMessage;
-    // private Date dateCreated;
-    // private String ipAddr;
-    // private String privateEntryFlag;
-    // try {
-    // Class.forName(myDriver);
-    // Connection conn = DriverManager.getConnection(myUrl, myUser, myPassword);
-    // String query = "SELECT name, message, when_posted, ipaddr, private from
-    // logbook ORDER BY when_posted ASC LIMIT 1";
-    // Statement st = conn.createStatement();
-    // ResultSet rs = st.executeQuery(query);
-    // this.userName = rs.getString("name");
-    // this.dateCreated = rs.getDate("when_posted");
-    // this.ipAddr = rs.getString("ipaddr");
-    // } catch (Exception e) {
-    // System.err.println("Got an exception! ");
-    // System.err.println(e.getMessage());
-    // }
-    // }
-
-    // This chunk of code exists for testing purposes.
-    @GetMapping("/logbook")
-    public String fetchData() {
-        String returnStuff = new String();
-        try {
-            // create our mysql database connection
-            String myDriver = "org.mariadb.jdbc.Driver";
-            String myUrl = "jdbc:mariadb://localhost/logbook";
-            Class.forName(myDriver);
-            Connection conn = DriverManager.getConnection(myUrl, "edwards", "Edwards");
-
-            String query = "SELECT name, message, when_posted, ipaddr, private from logbook ORDER BY when_posted ASC LIMIT 1";
-
-            // create the java statement
-            Statement st = conn.createStatement();
-
-            // execute the query, and get a java resultset
-            ResultSet rs = st.executeQuery(query);
-
-            // iterate through the java resultset
-            while (rs.next()) {
-                String name = rs.getString("name");
-                String message = rs.getString("message");
-                Date dateCreated = rs.getDate("when_posted");
-                String ipAddr = rs.getString("ipaddr");
-                String priv = rs.getString("private");
-
-                // print the results
-                // System.out.println(name);
-                // System.out.println(message);
-                // System.out.println(dateCreated);
-                // System.out.println(ipAddr);
-                // System.out.println(priv);
-                returnStuff = name + message;
-            }
-            st.close();
-        } catch (Exception e) {
-            System.err.println("Got an exception! ");
-            System.err.println(e.getMessage());
-        }
-        return returnStuff;
-    }
-
     @Override
     public List<Tag> retrieveTags() {
         List<Tag> allTags = new ArrayList<Tag>();
@@ -184,27 +114,33 @@ public class oualLogRetrieval implements LogRetrieval {
         try {
             Class.forName(myDriver);
             Connection conn = DriverManager.getConnection(myUrl, myUser, myPassword);
-            String query = "SELECT name, message, when_posted, ipaddr, private from logbook ORDER BY when_posted ASC LIMIT 2";
+            String query = "SELECT name, message, when_posted, ipaddr, private from logbook ORDER BY when_posted ASC LIMIT 1";
             Statement st = conn.createStatement();
             ResultSet rs = st.executeQuery(query);
             Attribute ipAddress;
             Attribute isPrivate;
             while(rs.next()) {
                 LogBuilder log = Log.LogBuilder.createLog();
-                Property allProperties = new Property();
-                Set<Property> something = new HashSet<Property>();
+                Property myProperties = new Property();
+                Set<Property> allProperties = new HashSet<Property>();
                 log.owner(rs.getString("name"));
+                Set<Tag> myTags = new HashSet<Tag>();
                 log.description(rs.getString("message"));
                 log.createDate(rs.getTimestamp("when_posted").toInstant());
                 log.withLogbook(new Logbook("jeoLogbook", null));
+                log.withLogbook(new Logbook("Operations", null));
+                myTags.add(new Tag("jeoLogbook"));
+                log.setTags(myTags);
                 ipAddress = new Attribute("IP Address", rs.getString("ipaddr"));
                 isPrivate = new Attribute("Is Private", rs.getString("private"));
-                allProperties.addAttributes(ipAddress);
-                allProperties.addAttributes(isPrivate);
-                something.add(allProperties);
-                log.setProperties(something);
+                myProperties.addAttributes(ipAddress);
+                myProperties.addAttributes(isPrivate);
+                myProperties.setName("Imported");
+                myProperties.setOwner("leblanc");
+                allProperties.add(myProperties);
+                log.setProperties(allProperties);
+                log.modifyDate(Instant.now());
                 someLogs.add(log.build());
-                System.out.println(rs.getString("name"));
             }
             st.close();
         }
@@ -212,12 +148,6 @@ public class oualLogRetrieval implements LogRetrieval {
             System.err.println("Got an exception! Also, this message sucks.");
             System.err.println(e.getMessage());
         }
-        finally {
-            
-        }
-        System.out.println(someLogs);
-        // System.out.println(name);
-
         return someLogs;
     }
 }
