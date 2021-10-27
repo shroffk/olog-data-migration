@@ -178,7 +178,7 @@ public class oualLogRetrieval implements LogRetrieval {
         Boolean isPrivate = false;
         Instant originalDate = Instant.now();
         List<Log> someLogs = new ArrayList<Log>();
-        LogBuilder log = Log.LogBuilder.createLog();
+
 
         try {
             Class.forName(myDriver);
@@ -186,21 +186,22 @@ public class oualLogRetrieval implements LogRetrieval {
             String query = "SELECT name, message, when_posted, ipaddr, private from logbook ORDER BY when_posted ASC LIMIT 1";
             Statement st = conn.createStatement();
             ResultSet rs = st.executeQuery(query);
-            while(rs.next()){
+            while(rs.next()) {
+                LogBuilder log = Log.LogBuilder.createLog();
                 log.owner(rs.getString("name"));
                 log.description(rs.getString("message"));
                 log.createDate(rs.getDate("when_posted").toInstant());
                 ipAddr = rs.getString("ipaddr");
                 isPrivate = rs.getBoolean("private");
+                return log.build();
             } 
-            st.close;
+            st.close();
         }
         catch (Exception e) {
             System.err.println("Got an exception! Also, this message sucks.");
             System.err.println(e.getMessage());
         }
-    }
-        System.out.println(log);
+        System.out.println(someLogs);
         System.out.println(name);
 
         return someLogs;
