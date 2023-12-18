@@ -9,8 +9,10 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <spring.boot-version>2.2.4.RELEASE</spring.boot-version>
+    <spring.boot-version>2.7.3</spring.boot-version>
+    <elasticsearch.version>8.2.0</elasticsearch.version>
     <lombok.version>1.18.16</lombok.version>
+    <junit.version>5.8.2</junit.version>
   </properties>
 
   <dependencyManagement>
@@ -39,10 +41,26 @@
       <artifactId>spring-data-mongodb</artifactId>
     </dependency>
 
+
     <dependency>
-      <groupId>org.elasticsearch.client</groupId>
-      <artifactId>elasticsearch-rest-high-level-client</artifactId>
-      <version>6.8.4</version>
+      <groupId>co.elastic.clients</groupId>
+      <artifactId>elasticsearch-java</artifactId>
+      <version>8.2.0</version>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.13.3</version>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-core</artifactId>
+      <version>2.13.3</version>
+    </dependency>
+    <dependency>
+      <groupId>jakarta.json</groupId>
+      <artifactId>jakarta.json-api</artifactId>
+      <version>2.0.1</version>
     </dependency>
     <!-- https://mvnrepository.com/artifact/org.apache.commons/commons-collections4 -->
     <dependency>
@@ -90,6 +108,13 @@
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
       <version>21.0</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>2.1.210</version>
+      <scope>runtime</scope>
     </dependency>
   </dependencies>
 

@@ -20,37 +20,43 @@ package org.phoebus.olog.entity;
 
 import java.util.List;
 
-/**
- * Simple pojo used to convey user name and list of roles to a client upon
- * login or explicit request
- */
-public class UserData {
+public class SearchResult {
 
-    private String userName;
-    private List<String> roles;
+    /**
+     * The total number of hits matching a search query. Note that this need not be
+     * the same as the size of {@link #logs}, e.g. in a pagination search where search can
+     * specify "from" and "size".
+     */
+    private long hitCount;
 
-    public UserData(){
+    /**
+     * The list of log entries matching a search query, taking into account potential "pagination"
+     * parameters (from + size).
+     */
+    private List<Log> logs;
+
+    public SearchResult(){
 
     }
 
-    public UserData(String userName, List<String> roles){
-        this.userName = userName;
-        this.roles = roles;
+    public SearchResult(long hitCount, List<Log> logs){
+        this.hitCount = hitCount;
+        this.logs = logs;
     }
 
-    public String getUserName() {
-        return userName;
+    public long getHitCount() {
+        return hitCount;
     }
 
-    public void setUserName(String userName) {
-        this.userName = userName;
+    public void setHitCount(long hitCount) {
+        this.hitCount = hitCount;
     }
 
-    public List<String> getRoles() {
-        return roles;
+    public List<Log> getLogs() {
+        return logs;
     }
 
-    public void setRoles(List<String> roles) {
-        this.roles = roles;
+    public void setLogs(List<Log> logs) {
+        this.logs = logs;
     }
 }

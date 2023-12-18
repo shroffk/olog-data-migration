@@ -5,9 +5,9 @@
  */
 package org.phoebus.olog.entity;
 
-import java.io.Serializable;
-
 import org.springframework.data.annotation.Id;
+
+import java.io.Serializable;
 
 /**
  * Logbook object that can be represented as JSON in payload data.

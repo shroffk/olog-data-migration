@@ -5,12 +5,11 @@
  */
 package org.phoebus.olog.entity;
 
-import java.time.Instant;
-
-import org.springframework.data.annotation.Id;
-
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import org.springframework.data.annotation.Id;
+
+import java.time.Instant;
 
 /**
  * A event represents a specific instance in time that can be assigned to log entries.

@@ -1,12 +1,12 @@
 package org.phoebus.olog.entity;
 
-import java.io.IOException;
-import java.time.Instant;
-
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+
+import java.io.IOException;
+import java.time.Instant;
 
 public class InstanceDeserializer extends StdDeserializer<Instant>
 {

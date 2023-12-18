@@ -5,12 +5,12 @@
  */
 package org.phoebus.olog.entity;
 
+import org.springframework.data.annotation.Id;
+
 import java.io.Serializable;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import org.springframework.data.annotation.Id;
 
 /**
  * Property object that can be represented as JSON in payload data.
@@ -40,6 +40,18 @@ public class Property implements Serializable {
      */
     public Property(String name) {
         this.name = name;
+    }
+
+    /**
+     * Create a new instance of Property.
+     * @param name - name property name
+     * @param owner - the owner of this property
+     * @param state - state property state
+     */
+    public Property(String name, String owner, State state) {
+        this.name = name;
+        this.setOwner(owner);
+        this.state = state;
     }
 
     /**
@@ -110,7 +122,7 @@ public class Property implements Serializable {
         this.state = state;
     }
 
-    
+
     /**
      * Getter for property attributes.
      * @return a set of the attributes

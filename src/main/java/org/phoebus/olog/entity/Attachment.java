@@ -5,9 +5,8 @@
  */
 package org.phoebus.olog.entity;
 
-import org.springframework.core.io.InputStreamSource;
-
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.springframework.core.io.InputStreamSource;
 
 /**
  * An object describing a log entry attachment.
@@ -22,6 +21,10 @@ public class Attachment
     private String fileMetadataDescription;
     @JsonIgnore
     private InputStreamSource attachment;
+
+    private String checksum;
+
+
 
     /**
      * Creates a new instance of Attachment.
@@ -137,5 +140,13 @@ public class Attachment
     public void setFileMetadataDescription(String fileMetadataDescription)
     {
         this.fileMetadataDescription = fileMetadataDescription;
+    }
+
+    public String getChecksum() {
+        return checksum;
+    }
+
+    public void setChecksum(String checksum) {
+        this.checksum = checksum;
     }
 }

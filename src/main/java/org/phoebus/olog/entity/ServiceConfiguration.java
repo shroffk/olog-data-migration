@@ -20,37 +20,33 @@ package org.phoebus.olog.entity;
 
 import java.util.List;
 
-/**
- * Simple pojo used to convey user name and list of roles to a client upon
- * login or explicit request
- */
-public class UserData {
+public class ServiceConfiguration {
 
-    private String userName;
-    private List<String> roles;
+    private Iterable<Logbook> logbooks;
+    private Iterable<Tag> tags;
+    private List<String> levels;
 
-    public UserData(){
-
+    public Iterable<Logbook> getLogbooks() {
+        return logbooks;
     }
 
-    public UserData(String userName, List<String> roles){
-        this.userName = userName;
-        this.roles = roles;
+    public void setLogbooks(Iterable<Logbook> logbooks) {
+        this.logbooks = logbooks;
     }
 
-    public String getUserName() {
-        return userName;
+    public Iterable<Tag> getTags() {
+        return tags;
     }
 
-    public void setUserName(String userName) {
-        this.userName = userName;
+    public void setTags(Iterable<Tag> tags) {
+        this.tags = tags;
     }
 
-    public List<String> getRoles() {
-        return roles;
+    public List<String> getLevels() {
+        return levels;
     }
 
-    public void setRoles(List<String> roles) {
-        this.roles = roles;
+    public void setLevels(List<String> levels) {
+        this.levels = levels;
     }
 }
