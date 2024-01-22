@@ -3,25 +3,27 @@ package org.phoebus.olog;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
 import com.mongodb.client.gridfs.GridFSBucket;
 import com.mongodb.client.gridfs.GridFSBuckets;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
+import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.config.AbstractMongoClientConfiguration;
-
+import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory;
+import org.springframework.data.mongodb.core.convert.DefaultDbRefResolver;
+import org.springframework.data.mongodb.core.convert.MappingMongoConverter;
+import org.springframework.data.mongodb.core.mapping.MongoMappingContext;
 import org.springframework.data.mongodb.gridfs.GridFsTemplate;
-
-import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoClients;
 
 @Configuration
 @PropertySource("classpath:application.properties")
-public class MongoConfig extends AbstractMongoClientConfiguration
-{
-    private static final Logger log = Logger.getLogger(MongoClient.class.getName());
-    
+public class MongoConfig extends AbstractMongoClientConfiguration {
+    private static final Logger log = Logger.getLogger(MongoConfig.class.getName());
+
     @Value("${mongo.database:ologAttachments}")
     private String mongoDbName;
     @Value("${mongo.host:localhost}")
@@ -29,34 +31,38 @@ public class MongoConfig extends AbstractMongoClientConfiguration
     @Value("${mongo.port:27017}")
     private int mongoPort;
 
+    @SuppressWarnings("unused")
     @Bean
-    public GridFsTemplate gridFsTemplate() throws Exception
-    {
-      return new GridFsTemplate(mongoDbFactory(), mappingMongoConverter());
+    public GridFsTemplate gridFsTemplate() {
+        MongoDatabaseFactory databaseFactory = mongoDbFactory();
+        DefaultDbRefResolver dbRefResolver = new DefaultDbRefResolver(databaseFactory);
+
+        MongoMappingContext mappingContext = new MongoMappingContext();
+        mappingContext.setAutoIndexCreation(true);
+        mappingContext.afterPropertiesSet();
+        return new GridFsTemplate(databaseFactory, new MappingMongoConverter(dbRefResolver, mappingContext));
     }
 
+
+    @SuppressWarnings("unused")
     @Bean
-    public GridFSBucket gridFSBucket(){
+    public GridFSBucket gridFSBucket() {
         return GridFSBuckets.create(mongoClient().getDatabase(mongoDbName));
     }
 
     @Override
-    protected String getDatabaseName()
-    {
+    public String getDatabaseName() {
         return mongoDbName;
     }
 
-    @Override
     @Bean
-    public MongoClient mongoClient()
-    {
-        try
-        {
-            return MongoClients.create("mongodb://"+mongoHost+":"+mongoPort);
-        } catch (Exception e)
-        {
-            log.log(Level.SEVERE, "Failed to create mongo gridFS client for attachments " , e);
-            return null;
-        }
+    @Override
+    public MongoClient mongoClient() {
+        return MongoClients.create("mongodb://" + mongoHost + ":" + mongoPort);
+    }
+
+    @Override
+    public MongoDatabaseFactory mongoDbFactory() {
+        return new SimpleMongoClientDatabaseFactory(mongoClient(), mongoDbName);
     }
 }

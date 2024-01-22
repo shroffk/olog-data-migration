@@ -1,30 +1,28 @@
 package org.phoebus.olog;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch.indices.CreateIndexRequest;
+import co.elastic.clients.elasticsearch.indices.CreateIndexResponse;
+import co.elastic.clients.elasticsearch.indices.ExistsRequest;
+import co.elastic.clients.json.jackson.JacksonJsonpMapper;
+import co.elastic.clients.transport.ElasticsearchTransport;
+import co.elastic.clients.transport.endpoints.BooleanResponse;
+import co.elastic.clients.transport.rest_client.RestClientTransport;
 import org.apache.http.HttpHost;
-import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
-import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
-import org.elasticsearch.action.admin.indices.template.put.PutIndexTemplateRequest;
-import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestClient;
-import org.elasticsearch.client.RestHighLevelClient;
-import org.elasticsearch.client.indices.GetIndexTemplatesRequest;
-import org.elasticsearch.client.indices.GetIndexTemplatesResponse;
-import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.XContentFactory;
+import org.elasticsearch.client.RestClientBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.io.InputStream;
+import java.text.MessageFormat;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * A element which creates the elastic rest clients used the olog service for
@@ -38,10 +36,22 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @PropertySource("classpath:application.properties")
 public class ElasticConfig
 {
+    public static final String ELASTIC_CREATED_INDEX_ACKNOWLEDGED       = "Created index {0} acknowledged {1}";
+    public static final String ELASTIC_FAILED_TO_CREATE_INDEX           = "Failed to create index {0}";
 
     private static final Logger logger = Logger.getLogger(ElasticConfig.class.getName());
 
     // Read the elatic index and type from the application.properties
+    @Value("${elasticsearch.http.connect_timeout_ms:" + RestClientBuilder.DEFAULT_CONNECT_TIMEOUT_MILLIS + "}") // default 1 second
+    private Integer ES_HTTP_CONNECT_TIMEOUT_MS;
+    @Value("${elasticsearch.http.socket_timeout_ms:" + RestClientBuilder.DEFAULT_SOCKET_TIMEOUT_MILLIS + "}") // default 30 seconds
+    private Integer ES_HTTP_SOCKET_TIMEOUT_MS;
+    @Value("${elasticsearch.http.keep_alive_timeout_ms:30000}") // default 30 seconds
+    private Long ES_HTTP_CLIENT_KEEP_ALIVE_TIMEOUT_MS;
+    @Value("${elasticsearch.index.create.timeout:30s}")
+    private String ES_INDEX_CREATE_TIMEOUT;
+    @Value("${elasticsearch.index.create.master_timeout:30s}")
+    private String ES_INDEX_CREATE_MASTER_TIMEOUT;
     @Value("${elasticsearch.tag.index:olog_tags}")
     private String ES_TAG_INDEX;
     @Value("${elasticsearch.tag.type:olog_tag}")
@@ -69,163 +79,167 @@ public class ElasticConfig
     private String host;
     @Value("${elasticsearch.http.port:9200}")
     private int port;
+    @Value("${elasticsearch.http.protocol:http}")
+    private String protocol;
+    @Value("${elasticsearch.create.indices:true}")
+    private String createIndices;
 
-    private RestHighLevelClient searchClient;
-    private RestHighLevelClient indexClient;
+    private ElasticsearchClient client;
+    private static final AtomicBoolean esInitialized = new AtomicBoolean();
 
-    @Bean({ "searchClient" })
-    public RestHighLevelClient getSearchClient()
-    {
-        if (searchClient == null)
-        {
-            searchClient = new RestHighLevelClient(RestClient.builder(new HttpHost(host, port, "http")));
-        }
-        return searchClient;
+    private CreateIndexRequest.Builder withTimeouts(CreateIndexRequest.Builder builder) {
+        return builder
+                .timeout(timeBuilder ->
+                        timeBuilder.time(ES_INDEX_CREATE_TIMEOUT)
+                ).masterTimeout( timeBuilder ->
+                        timeBuilder.time(ES_INDEX_CREATE_MASTER_TIMEOUT)
+                );
     }
 
-    @Bean({ "indexClient" })
-    public RestHighLevelClient getIndexClient()
-    {
-        if (indexClient == null)
-        {
-            indexClient = new RestHighLevelClient(RestClient.builder(new HttpHost(host, port, "http")));
-            elasticIndexValidation(indexClient);
+    private void logCreateIndexRequest(CreateIndexRequest request) {
+        logger.log(Level.INFO, () -> String.format(
+                "CreateIndexRequest: " +
+                        "index: %s, " +
+                        "timeout: %s, " +
+                        "masterTimeout: %s, " +
+                        "waitForActiveShards: %s",
+                request.index(),
+                request.timeout() != null ? request.timeout().time() : null,
+                request.masterTimeout() != null ? request.masterTimeout().time() : null,
+                request.waitForActiveShards() != null ? request.waitForActiveShards()._toJsonString() : null
+        ));
+    }
+
+    @Bean({"client"})
+    public ElasticsearchClient getClient() {
+        if (client == null) {
+            // Create the low-level client
+            logger.log(Level.INFO, () -> String.format("Creating HTTP client with " +
+                            "host %s, " +
+                            "port %s, " +
+                            "protocol %s, " +
+                            "keep-alive %s ms, " +
+                            "connect timeout %s ms, " +
+                            "socket timeout %s ms",
+                    host, port, protocol,
+                    ES_HTTP_CLIENT_KEEP_ALIVE_TIMEOUT_MS,
+                    ES_HTTP_CONNECT_TIMEOUT_MS,
+                    ES_HTTP_SOCKET_TIMEOUT_MS
+            ));
+            RestClient httpClient = RestClient.builder(new HttpHost(host, port, protocol))
+                    .setRequestConfigCallback( builder ->
+                            builder.setConnectTimeout(ES_HTTP_CONNECT_TIMEOUT_MS)
+                                    .setSocketTimeout(ES_HTTP_SOCKET_TIMEOUT_MS)
+                    )
+                    .setHttpClientConfigCallback(builder ->
+                            // Avoid timeout problems
+                            // https://github.com/elastic/elasticsearch/issues/65213
+                            builder.setKeepAliveStrategy((response, context) -> ES_HTTP_CLIENT_KEEP_ALIVE_TIMEOUT_MS)
+                    )
+                    .build();
+
+            // Create the Java API Client with the same low level client
+            ElasticsearchTransport transport = new RestClientTransport(
+                    httpClient,
+                    new JacksonJsonpMapper()
+            );
+            client = new ElasticsearchClient(transport);
+            esInitialized.set(!Boolean.parseBoolean(createIndices));
+            if (esInitialized.compareAndSet(false, true)) {
+                elasticIndexValidation(client);
+            }
         }
-        return indexClient;
+        return client;
     }
 
     /**
      * Checks for the existence of the elastic indices needed for Olog and creates
      * them with the appropriate mapping is they are missing.
      * 
-     * @param indexClient the elastic client instance used to validate and create
+     * @param client the elastic client instance used to validate and create
      *                    olog indices
      */
     @SuppressWarnings({ "deprecation", "unchecked" })
-    private synchronized void elasticIndexValidation(RestHighLevelClient indexClient)
+    private synchronized void elasticIndexValidation(ElasticsearchClient client)
     {
-        // Create/migrate the tag index
 
-        try
-        {
-            if (!indexClient.indices().exists(new GetIndexRequest().indices(ES_TAG_INDEX), RequestOptions.DEFAULT))
-            {
-                CreateIndexRequest createRequest = new CreateIndexRequest(ES_TAG_INDEX);
-                ObjectMapper mapper = new ObjectMapper();
-                InputStream is = ElasticConfig.class.getResourceAsStream("/tag_mapping.json");
-                Map<String, String> jsonMap = mapper.readValue(is, Map.class);
-                createRequest.mapping(ES_TAG_TYPE, jsonMap);
-
-                indexClient.indices().create(createRequest, RequestOptions.DEFAULT);
-                logger.info("Successfully created index: " + ES_TAG_INDEX);
+        // Olog Sequence Index
+        try (InputStream is = ElasticConfig.class.getResourceAsStream("/seq_mapping.json")) {
+            BooleanResponse exists = client.indices().exists(ExistsRequest.of(e -> e.index(ES_SEQ_INDEX)));
+            if(!exists.value()) {
+                CreateIndexRequest request = CreateIndexRequest.of(
+                        c -> withTimeouts(c).index(ES_SEQ_INDEX)
+                                .withJson(is)
+                );
+                logCreateIndexRequest(request);
+                CreateIndexResponse result = client.indices().create(
+                        request
+                );
+                logger.log(Level.INFO, () -> MessageFormat.format(ELASTIC_CREATED_INDEX_ACKNOWLEDGED, ES_SEQ_INDEX, result.acknowledged()));
             }
-        } catch (IOException e)
-        {
-            logger.log(Level.WARNING, "Failed to create index " + ES_TAG_INDEX, e);
-        }
-        // Create/migrate the logbook index
-        try
-        {
-            if (!indexClient.indices().exists(new GetIndexRequest().indices(ES_LOGBOOK_INDEX), RequestOptions.DEFAULT))
-            {
-                CreateIndexRequest createRequest = new CreateIndexRequest(ES_LOGBOOK_INDEX);
-                ObjectMapper mapper = new ObjectMapper();
-                InputStream is = ElasticConfig.class.getResourceAsStream("/logbook_mapping.json");
-                Map<String, String> jsonMap = mapper.readValue(is, Map.class);
-                createRequest.mapping(ES_LOGBOOK_TYPE, jsonMap);
-
-                indexClient.indices().create(createRequest, RequestOptions.DEFAULT);
-                logger.info("Successfully created index: " + ES_LOGBOOK_INDEX);
-            }
-        } catch (IOException e)
-        {
-            logger.log(Level.WARNING, "Failed to create index " + ES_LOGBOOK_INDEX, e);
-        }
-        // Create/migrate the property index
-        try
-        {
-            if (!indexClient.indices().exists(new GetIndexRequest().indices(ES_PROPERTY_INDEX), RequestOptions.DEFAULT))
-            {
-                CreateIndexRequest createRequest = new CreateIndexRequest(ES_PROPERTY_INDEX);
-                ObjectMapper mapper = new ObjectMapper();
-                InputStream is = ElasticConfig.class.getResourceAsStream("/property_mapping.json");
-                Map<String, String> jsonMap = mapper.readValue(is, Map.class);
-                createRequest.mapping(ES_PROPERTY_TYPE, jsonMap);
-
-                indexClient.indices().create(createRequest, RequestOptions.DEFAULT);
-                logger.info("Successfully created index: " + ES_PROPERTY_INDEX);
-            }
-        } catch (IOException e)
-        {
-            logger.log(Level.WARNING, "Failed to create index " + ES_PROPERTY_INDEX, e);
+        } catch (IOException e) {
+            logger.log(Level.WARNING, MessageFormat.format(ELASTIC_FAILED_TO_CREATE_INDEX, ES_SEQ_INDEX), e);
         }
 
-        // Create/migrate the sequence index
-        try
-        {
-            if (!indexClient.indices().exists(new GetIndexRequest().indices(ES_SEQ_INDEX), RequestOptions.DEFAULT))
-            {
-                CreateIndexRequest createRequest = new CreateIndexRequest(ES_SEQ_INDEX);
-                createRequest.settings(
-                        Settings.builder().put("index.number_of_shards", 1).put("auto_expand_replicas", "0-all"));
-                ObjectMapper mapper = new ObjectMapper();
-                InputStream is = ElasticConfig.class.getResourceAsStream("/seq_mapping.json");
-                Map<String, String> jsonMap = mapper.readValue(is, Map.class);
-                createRequest.mapping(ES_SEQ_TYPE, jsonMap);
-                logger.info("Successfully created index: " + ES_SEQ_TYPE);
+        // Olog Logbook Index
+        try (InputStream is = ElasticConfig.class.getResourceAsStream("/logbook_mapping.json")) {
+            BooleanResponse exits = client.indices().exists(ExistsRequest.of(e -> e.index(ES_LOGBOOK_INDEX)));
+            if(!exits.value()) {
+                CreateIndexRequest request = CreateIndexRequest.of(
+                        c -> withTimeouts(c).index(ES_LOGBOOK_INDEX).withJson(is)
+                );
+                logCreateIndexRequest(request);
+                CreateIndexResponse result = client.indices().create(request);
+                logger.log(Level.INFO, () -> MessageFormat.format(ELASTIC_CREATED_INDEX_ACKNOWLEDGED, ES_LOGBOOK_INDEX, result.acknowledged()));
             }
-        } catch (IOException e)
-        {
-            logger.log(Level.WARNING, "Failed to create index " + ES_SEQ_INDEX, e);
+        } catch (IOException e) {
+            logger.log(Level.WARNING, MessageFormat.format(ELASTIC_FAILED_TO_CREATE_INDEX, ES_LOGBOOK_INDEX), e);
         }
 
-        // create/migrate log template
-        try
-        {
-            GetIndexTemplatesResponse templates = indexClient.indices()
-                    .getIndexTemplate(new GetIndexTemplatesRequest("*"), RequestOptions.DEFAULT);
-            if (!templates.getIndexTemplates().stream().anyMatch(i -> {
-                return i.name().equalsIgnoreCase(ES_LOG_INDEX + "_template");
-            }))
-            {
-                PutIndexTemplateRequest templateRequest = new PutIndexTemplateRequest(ES_LOG_INDEX + "_template");
-
-                templateRequest.patterns(Arrays.asList(ES_LOG_INDEX));
-
-                ObjectMapper mapper = new ObjectMapper();
-                InputStream is = ElasticConfig.class.getResourceAsStream("/log_template_mapping.json");
-
-                Map<String, String> jsonMap = mapper.readValue(is, Map.class);
-                templateRequest.mapping(ES_LOG_TYPE, XContentFactory.jsonBuilder().map(jsonMap));
-                templateRequest.create(true);
-                indexClient.indices().putTemplate(templateRequest, RequestOptions.DEFAULT);
+        // Olog Tag Index
+        try (InputStream is = ElasticConfig.class.getResourceAsStream("/tag_mapping.json")) {
+            BooleanResponse exits = client.indices().exists(ExistsRequest.of(e -> e.index(ES_TAG_INDEX)));
+            if(!exits.value()) {
+                CreateIndexRequest request = CreateIndexRequest.of(
+                        c -> withTimeouts(c).index(ES_TAG_INDEX).withJson(is)
+                );
+                logCreateIndexRequest(request);
+                CreateIndexResponse result = client.indices().create(request);
+                logger.log(Level.INFO, () -> MessageFormat.format(ELASTIC_CREATED_INDEX_ACKNOWLEDGED, ES_TAG_INDEX, result.acknowledged()));
             }
-
-            // Get the index templates again...
-            templates = indexClient.indices().getIndexTemplate(new GetIndexTemplatesRequest("*"),
-                    RequestOptions.DEFAULT);
-
-            if (templates.getIndexTemplates().stream().anyMatch(i -> {
-                return i.name().equalsIgnoreCase(ES_LOG_INDEX + "_template") && i.version() == null;
-            }))
-            {
-                PutIndexTemplateRequest templateRequest = new PutIndexTemplateRequest(ES_LOG_INDEX + "_template");
-
-                templateRequest.patterns(Arrays.asList(ES_LOG_INDEX));
-
-                ObjectMapper mapper = new ObjectMapper();
-                InputStream is = ElasticConfig.class.getResourceAsStream("/log_template_mapping_with_title.json");
-
-                Map<String, String> jsonMap = mapper.readValue(is, Map.class);
-                templateRequest.mapping(ES_LOG_TYPE, XContentFactory.jsonBuilder().map(jsonMap)).version(2);
-                templateRequest.create(false);
-                indexClient.indices().putTemplate(templateRequest, RequestOptions.DEFAULT);
-            }
-        } catch (IOException e)
-        {
-            logger.log(Level.WARNING, "Failed to create template for index " + ES_LOG_TYPE, e);
+        } catch (IOException e) {
+            logger.log(Level.WARNING, MessageFormat.format(ELASTIC_FAILED_TO_CREATE_INDEX, ES_TAG_INDEX), e);
         }
 
+        // Olog Property Index
+        try (InputStream is = ElasticConfig.class.getResourceAsStream("/property_mapping.json")) {
+            BooleanResponse exits = client.indices().exists(ExistsRequest.of(e -> e.index(ES_PROPERTY_INDEX)));
+            if(!exits.value()) {
+                CreateIndexRequest request = CreateIndexRequest.of(
+                        c -> withTimeouts(c).index(ES_PROPERTY_INDEX).withJson(is)
+                );
+                logCreateIndexRequest(request);
+                CreateIndexResponse result = client.indices().create(request);
+                logger.log(Level.INFO, () -> MessageFormat.format(ELASTIC_CREATED_INDEX_ACKNOWLEDGED, ES_PROPERTY_INDEX, result.acknowledged()));
+            }
+        } catch (IOException e) {
+            logger.log(Level.WARNING, MessageFormat.format(ELASTIC_FAILED_TO_CREATE_INDEX, ES_PROPERTY_INDEX), e);
+        }
+
+        // Olog Log Template
+        try (InputStream is = ElasticConfig.class.getResourceAsStream("/log_entry_mapping.json")) {
+            BooleanResponse exits = client.indices().exists(ExistsRequest.of(e -> e.index(ES_LOG_INDEX)));
+            if(!exits.value()) {
+                CreateIndexRequest request = CreateIndexRequest.of(
+                        c -> withTimeouts(c).index(ES_LOG_INDEX).withJson(is)
+                );
+                logCreateIndexRequest(request);
+                CreateIndexResponse result = client.indices().create(request);
+                logger.log(Level.INFO, () -> MessageFormat.format(ELASTIC_CREATED_INDEX_ACKNOWLEDGED, ES_LOG_INDEX, result.acknowledged()));
+            }
+        } catch (IOException e) {
+            logger.log(Level.WARNING, MessageFormat.format(ELASTIC_FAILED_TO_CREATE_INDEX, ES_LOG_INDEX), e);
+        }
     }
 
 }

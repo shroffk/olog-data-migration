@@ -1,38 +1,28 @@
 package org.phoebus.olog;
 
-import static org.phoebus.olog.OlogDataMigrationApplication.logger;
-
-import java.io.IOException;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import org.apache.http.HttpHost;
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.Refresh;
+import co.elastic.clients.elasticsearch._types.Result;
+import co.elastic.clients.elasticsearch.core.BulkRequest;
+import co.elastic.clients.elasticsearch.core.BulkResponse;
+import co.elastic.clients.elasticsearch.core.GetRequest;
+import co.elastic.clients.elasticsearch.core.GetResponse;
+import co.elastic.clients.elasticsearch.core.IndexRequest;
+import co.elastic.clients.elasticsearch.core.IndexResponse;
+import co.elastic.clients.elasticsearch.core.bulk.BulkOperation;
+import co.elastic.clients.elasticsearch.core.bulk.IndexOperation;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mongodb.client.gridfs.GridFSBucket;
+import com.mongodb.client.gridfs.model.GridFSUploadOptions;
 import org.bson.BsonString;
 import org.bson.Document;
 import org.bson.types.ObjectId;
-import org.elasticsearch.action.DocWriteResponse.Result;
-import org.elasticsearch.action.bulk.BulkRequest;
-import org.elasticsearch.action.bulk.BulkResponse;
-import org.elasticsearch.action.get.GetRequest;
-import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.action.index.IndexResponse;
-import org.elasticsearch.action.support.WriteRequest;
-import org.elasticsearch.client.RequestOptions;
-import org.elasticsearch.client.RestClient;
-import org.elasticsearch.client.RestHighLevelClient;
-import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.xcontent.XContentType;
 import org.phoebus.olog.entity.Attachment;
 import org.phoebus.olog.entity.Log;
+import org.phoebus.olog.entity.Log.LogBuilder;
 import org.phoebus.olog.entity.Logbook;
 import org.phoebus.olog.entity.Property;
 import org.phoebus.olog.entity.Tag;
-import org.phoebus.olog.entity.Log.LogBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,10 +31,15 @@ import org.springframework.data.mongodb.gridfs.GridFsTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mongodb.client.gridfs.GridFSBucket;
-import com.mongodb.client.gridfs.model.GridFSUploadOptions;
+import java.io.IOException;
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.logging.Level;
+
+import static org.phoebus.olog.OlogDataMigrationApplication.logger;
 
 public class OlogMigrationService
 {
@@ -71,15 +66,15 @@ public class OlogMigrationService
     private String ES_LOG_TYPE;
 
     @Autowired
-    @Qualifier("indexClient")
-    RestHighLevelClient client;
+    @Qualifier("client")
+    ElasticsearchClient client;
 
     public void status()
     {
         logger.info("Starting the olog migration process with " + this);
         try
         {
-            logger.info("elastic client created: " + client.info(RequestOptions.DEFAULT).toString());
+            logger.info("elastic client created: " + client.info().toString());
         } catch (IOException e)
         {
             logger.log(Level.SEVERE, "Failed to create elastic client ", e);
@@ -97,40 +92,33 @@ public class OlogMigrationService
     public List<Tag> transferTags(List<Tag> tags)
     {
 
-        BulkRequest bulk = new BulkRequest();
-        tags.forEach(tag -> {
-            try
-            {
-                bulk.add(new IndexRequest(ES_TAG_INDEX, ES_TAG_TYPE, tag.getName())
-                        .source(mapper.writeValueAsBytes(tag), XContentType.JSON));
-            } catch (JsonProcessingException e)
-            {
-                logger.log(Level.SEVERE, e.getMessage(), e);
-            }
-        });
+        List<BulkOperation> bulkOperations = new ArrayList<>();
+        tags.forEach(tag -> bulkOperations.add(IndexOperation.of(i ->
+                i.index(ES_TAG_INDEX).document(tag).id(tag.getName()))._toBulkOperation()));
+        BulkRequest bulkRequest =
+                BulkRequest.of(r ->
+                        r.operations(bulkOperations).refresh(Refresh.True));
+
         BulkResponse bulkResponse;
-        try
-        {
-            bulk.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-            bulkResponse = client.bulk(bulk, RequestOptions.DEFAULT);
-            if (bulkResponse.hasFailures())
-            {
+        try {
+            bulkResponse = client.bulk(bulkRequest);
+            if (bulkResponse.errors()) {
                 // process failures by iterating through each bulk response item
-                bulkResponse.forEach(response -> {
-                    if (response.getFailure() != null)
-                    {
-                        logger.log(Level.SEVERE, response.getFailureMessage(), response.getFailure().getCause());
+                bulkResponse.items().forEach(responseItem -> {
+                    if (responseItem.error() != null) {
+                        logger.log(Level.SEVERE, responseItem.error().reason());
                     }
                 });
-            } else
-            {
+                String message = MessageFormat.format("Failed to create tags {0}", tags);
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, message);
+            } else {
                 return tags;
             }
-        } catch (IOException e)
-        {
-            logger.log(Level.SEVERE, e.getMessage(), e);
+        } catch (IOException e) {
+            String message = MessageFormat.format("Failed to create tags {0}", tags);
+            logger.log(Level.SEVERE, message, e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, message);
         }
-        return null;
     }
 
     /**
@@ -141,42 +129,32 @@ public class OlogMigrationService
      */
     public List<Logbook> transferLogbooks(List<Logbook> logbooks)
     {
-
-        BulkRequest bulk = new BulkRequest();
-        logbooks.forEach(logbook -> {
-            try
-            {
-                bulk.add(new IndexRequest(ES_LOGBOOK_INDEX, ES_LOGBOOK_TYPE, logbook.getName())
-                        .source(mapper.writeValueAsBytes(logbook), XContentType.JSON));
-            } catch (JsonProcessingException e)
-            {
-                logger.log(Level.SEVERE, e.getMessage(), e);
-
-            }
-        });
-        bulk.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+        List<BulkOperation> bulkOperations = new ArrayList<>();
+        logbooks.forEach(logbook -> bulkOperations.add(IndexOperation.of(i ->
+                i.index(ES_LOGBOOK_INDEX).document(logbook).id(logbook.getName()))._toBulkOperation()));
+        BulkRequest bulkRequest =
+                BulkRequest.of(r ->
+                        r.operations(bulkOperations).refresh(Refresh.True));
         BulkResponse bulkResponse;
-        try
-        {
-            bulkResponse = client.bulk(bulk, RequestOptions.DEFAULT);
-            if (bulkResponse.hasFailures())
-            {
+        try {
+            bulkResponse = client.bulk(bulkRequest);
+            if (bulkResponse.errors()) {
                 // process failures by iterating through each bulk response item
-                bulkResponse.forEach(response -> {
-                    if (response.getFailure() != null)
-                    {
-                        logger.log(Level.SEVERE, response.getFailureMessage(), response.getFailure().getCause());
+                bulkResponse.items().forEach(responseItem -> {
+                    if (responseItem.error() != null) {
+                        logger.log(Level.SEVERE, responseItem.error().reason());
                     }
                 });
-            } else
-            {
+                String message = MessageFormat.format("Failed to created logbooks {0}", logbooks);
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, message);
+            } else {
                 return logbooks;
             }
-        } catch (IOException e)
-        {
-            logger.log(Level.SEVERE, e.getMessage(), e);
+        } catch (IOException e) {
+            String message = MessageFormat.format("Failed to created logbooks {0}", logbooks);
+            logger.log(Level.SEVERE, message, e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, message);
         }
-        return null;
     }
 
     /**
@@ -187,42 +165,34 @@ public class OlogMigrationService
      */
     public List<Property> transferProperties(List<Property> properties)
     {
+        List<BulkOperation> bulkOperations = new ArrayList<>();
+        properties.forEach(property -> bulkOperations.add(IndexOperation.of(i ->
+                i.index(ES_PROPERTY_INDEX).document(property).id(property.getName()))._toBulkOperation()));
 
-        BulkRequest bulk = new BulkRequest();
-        properties.forEach(property -> {
-            try
-            {
-                bulk.add(new IndexRequest(ES_PROPERTY_INDEX, ES_PROPERTY_TYPE, property.getName())
-                        .source(mapper.writeValueAsBytes(property), XContentType.JSON));
-            } catch (JsonProcessingException e)
-            {
-                logger.log(Level.SEVERE, e.getMessage(), e);
-            }
-        });
+        BulkRequest bulkRequest = BulkRequest.of(r ->
+                r.operations(bulkOperations).refresh(Refresh.True));
+
         BulkResponse bulkResponse;
-        try
-        {
-            bulk.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-            bulkResponse = client.bulk(bulk, RequestOptions.DEFAULT);
-
-            if (bulkResponse.hasFailures())
-            {
+        try {
+            bulkResponse = client.bulk(bulkRequest);
+            if (bulkResponse.errors()) {
                 // process failures by iterating through each bulk response item
-                bulkResponse.forEach(response -> {
-                    if (response.getFailure() != null)
-                    {
-                        logger.log(Level.SEVERE, response.getFailureMessage(), response.getFailure().getCause());
+                bulkResponse.items().forEach(responseItem -> {
+                    if (responseItem.error() != null) {
+                        logger.log(Level.SEVERE, responseItem.error().reason());
                     }
                 });
-            } else
-            {
+                String message = MessageFormat.format("Failed to create properties {0}", properties);
+                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, message);
+            } else {
+
                 return properties;
             }
-        } catch (IOException e)
-        {
-            logger.log(Level.SEVERE, e.getMessage(), e);
+        } catch (IOException e) {
+            String message = MessageFormat.format("Failed to create properties {0}", properties);
+            logger.log(Level.SEVERE, message, e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, message);
         }
-        return null;
     }
 
     public List<Log> transferLogs(List<Log> logs)
@@ -234,7 +204,7 @@ public class OlogMigrationService
             try
             {
                 Long id = generator.getID();
-                LogBuilder validatedLog = LogBuilder.createLog(log).id(id).createDate(Instant.now());
+                LogBuilder validatedLog = LogBuilder.createLog(log).id(id).createDate(log.getCreatedDate());
                 if (log.getAttachments() != null && !log.getAttachments().isEmpty())
                 {
                     Set<Attachment> createdAttachments = new HashSet<Attachment>();
@@ -246,20 +216,23 @@ public class OlogMigrationService
                     validatedLog = validatedLog.setAttachments(createdAttachments);
                 }
 
-                IndexRequest indexRequest = new IndexRequest(ES_LOG_INDEX, ES_LOG_TYPE, String.valueOf(id))
-                        .source(mapper.writeValueAsBytes(validatedLog.build()), XContentType.JSON)
-                        .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                Log document = validatedLog.build();
 
-                IndexResponse response = client.index(indexRequest, RequestOptions.DEFAULT);
+                IndexRequest<Object> indexRequest =
+                        IndexRequest.of(i ->
+                                i.index(ES_LOG_INDEX)
+                                        .id(String.valueOf(id))
+                                        .document(document)
+                                        .refresh(Refresh.True));
+                IndexResponse response = client.index(indexRequest);
 
-                if (response.getResult().equals(Result.CREATED))
-                {
-                    BytesReference ref = client
-                            .get(new GetRequest(ES_LOG_INDEX, ES_LOG_TYPE, response.getId()), RequestOptions.DEFAULT)
-                            .getSourceAsBytesRef();
-
-                    Log createdLog = mapper.readValue(ref.streamInput(), Log.class);
-                    transferredLogs.add(createdLog);
+                if (response.result().equals(Result.Created)) {
+                    GetRequest getRequest =
+                            GetRequest.of(g ->
+                                    g.index(ES_LOG_INDEX).id(response.id()));
+                    GetResponse<Log> resp =
+                            client.get(getRequest, Log.class);
+                    transferredLogs.add(resp.source());
                 }
             } catch (Exception e)
             {
