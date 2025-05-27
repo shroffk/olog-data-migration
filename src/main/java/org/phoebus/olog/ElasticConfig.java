@@ -126,17 +126,23 @@ public class ElasticConfig
                     ES_HTTP_CONNECT_TIMEOUT_MS,
                     ES_HTTP_SOCKET_TIMEOUT_MS
             ));
-            RestClient httpClient = RestClient.builder(new HttpHost(host, port, protocol))
-                    .setRequestConfigCallback( builder ->
-                            builder.setConnectTimeout(ES_HTTP_CONNECT_TIMEOUT_MS)
-                                    .setSocketTimeout(ES_HTTP_SOCKET_TIMEOUT_MS)
-                    )
-                    .setHttpClientConfigCallback(builder ->
-                            // Avoid timeout problems
-                            // https://github.com/elastic/elasticsearch/issues/65213
-                            builder.setKeepAliveStrategy((response, context) -> ES_HTTP_CLIENT_KEEP_ALIVE_TIMEOUT_MS)
-                    )
-                    .build();
+            RestClient httpClient = null;
+            try {
+                httpClient = RestClient.builder(new HttpHost(host, port))
+                        .setRequestConfigCallback( builder ->
+                                builder.setConnectTimeout(ES_HTTP_CONNECT_TIMEOUT_MS)
+                                        .setSocketTimeout(ES_HTTP_SOCKET_TIMEOUT_MS)
+                        )
+                        .setHttpClientConfigCallback(builder ->
+                                // Avoid timeout problems
+                                // https://github.com/elastic/elasticsearch/issues/65213
+                                builder.setKeepAliveStrategy((response, context) -> ES_HTTP_CLIENT_KEEP_ALIVE_TIMEOUT_MS)
+                        )
+                        .build();
+            } catch (Exception e) {
+                logger.log(Level.WARNING, e.getMessage(), e);
+            }
+
 
             // Create the Java API Client with the same low level client
             ElasticsearchTransport transport = new RestClientTransport(
