@@ -5,6 +5,8 @@
 
 package org.phoebus.old.olog;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlTransient;
 import javax.xml.bind.annotation.XmlType;
@@ -18,6 +20,7 @@ import javax.xml.bind.annotation.XmlType;
 
 @XmlType
 @XmlRootElement(name = "attachment")
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class XmlAttachment {
     @XmlTransient
     protected String fileName;

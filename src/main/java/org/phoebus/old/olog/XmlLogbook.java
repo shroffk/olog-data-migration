@@ -5,6 +5,8 @@
  */
 package org.phoebus.old.olog;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
@@ -17,6 +19,7 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlType(propOrder = {"id", "name", "owner", "xmlLogs"})
 @XmlRootElement(name = "logbook")
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class XmlLogbook {
 
     private String name = null;

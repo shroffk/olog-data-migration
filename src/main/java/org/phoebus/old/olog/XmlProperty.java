@@ -5,6 +5,8 @@
  */
 package org.phoebus.old.olog;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.Map;
 
 import javax.xml.bind.annotation.XmlAccessType;
@@ -21,6 +23,7 @@ import javax.xml.bind.annotation.XmlType;
  *         <Ralph.Lange@helmholtz-berlin.de>
  */
 @XmlRootElement(name = "property")
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class XmlProperty {
 
     private int id;

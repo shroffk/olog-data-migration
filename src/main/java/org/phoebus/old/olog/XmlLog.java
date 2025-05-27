@@ -5,6 +5,9 @@
  */
 package org.phoebus.old.olog;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import javax.xml.bind.annotation.XmlRootElement;
@@ -22,6 +25,7 @@ import javax.xml.bind.annotation.XmlElementWrapper;
  */
 @XmlAccessorType(XmlAccessType.NONE)
 @XmlRootElement(name = "log")
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class XmlLog {
 
     private Long id;
@@ -36,10 +40,14 @@ public class XmlLog {
     private Date modifiedDate;
 //    private String subject;
     private String description;
+    @JsonProperty("properties")
     private Collection<XmlProperty> properties = new ArrayList<XmlProperty>();
+    @JsonProperty("logbooks")
     private Collection<XmlLogbook> logbooks = new ArrayList<XmlLogbook>();
+    @JsonProperty("tags")
     private Collection<XmlTag> tags = new ArrayList<XmlTag>();
-    private XmlAttachments attachments = new XmlAttachments();
+    @JsonProperty("attachments")
+    private Collection<XmlAttachment> attachments = new ArrayList<>();
 
     /** Creates a new instance of XmlLog */
     public XmlLog() {
@@ -66,7 +74,6 @@ public class XmlLog {
     /**
      * Creates a new instance of XmlLog.
      *
-     * @param subject log subject
      * @param owner log owner
      */
     public XmlLog(/*String subject, */String owner) {
@@ -268,7 +275,7 @@ public class XmlLog {
     /**
      * Setter for MD5 entry.
      *
-     * @param description the value to set
+     * @param md5entry the value to set
      */
     public void setMD5Entry(String md5entry) {
         this.md5Entry = md5entry;
@@ -286,7 +293,7 @@ public class XmlLog {
     /**
      * Setter for Table id.
      *
-     * @param Table id to set
+     * @param tableId id to set
      */
     public void setTableId(Long tableId) {
         this.tableId = tableId;
@@ -385,7 +392,7 @@ public class XmlLog {
      * @return XmlAttachments for this log
      */
     @XmlElement(name = "attachments")
-    public XmlAttachments getXmlAttachments() {
+    public Collection<XmlAttachment> getXmlAttachments() {
         return attachments;
     }
 
@@ -394,18 +401,18 @@ public class XmlLog {
      *
      * @param attachments XmlAttachments
      */
-    public void setXmlAttachments(XmlAttachments attachments) {
+    public void setXmlAttachments(Collection<XmlAttachment> attachments) {
         this.attachments = attachments;
     }
 
-    /**
-     * Adds an XmlAttachment to the collection.
-     *
-     * @param attachment
-     */
-    public void addXmlAttachment(XmlAttachment attachment) {
-        this.attachments.addXmlAttachment(attachment);
-    }
+//    /**
+//     * Adds an XmlAttachment to the collection.
+//     *
+//     * @param attachment
+//     */
+//    public void addXmlAttachment(XmlAttachment attachment) {
+//        this.attachments.addXmlAttachment(attachment);
+//    }
 
     /**
      * Creates a compact string representation for the log.
@@ -423,7 +430,6 @@ public class XmlLog {
         return data.getId() + "-v." + data.getVersion() + " : " + /*data.getSubject() +*/ "(" + data.getOwner() + "):["
                 + XmlLogbooks.toLog(xl)
                 + XmlTags.toLog(xt)
-                + XmlAttachments.toLog(data.attachments)
                 + "]\n";
     }
 }

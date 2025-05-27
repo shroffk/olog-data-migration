@@ -6,6 +6,8 @@
 
 package org.phoebus.old.olog;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
@@ -18,6 +20,7 @@ import javax.xml.bind.annotation.XmlType;
  */
 @XmlType(propOrder = {"name","state","xmlLogs"})
 @XmlRootElement(name = "tag")
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class XmlTag {
     private String name = null;
     private String state = null;
