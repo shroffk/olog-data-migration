@@ -16,13 +16,13 @@ import org.phoebus.olog.entity.Logbook;
 public interface LogRetrieval
 {
 
-    public List<Tag> retrieveTags();
+    List<Tag> retrieveTags();
 
-    public List<Property> retrieveProperties();
+    List<Property> retrieveProperties();
 
-    public List<Logbook> retrieveLogbooks();
+    List<Logbook> retrieveLogbooks();
 
-    public List<Log> retrieveLogs(int size, int page);
+    List<Log> retrieveLogs(int size, int page);
 
     int retireveLogCount();
 
