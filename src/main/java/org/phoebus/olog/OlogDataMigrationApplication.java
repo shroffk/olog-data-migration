@@ -17,7 +17,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 
 @SpringBootApplication
-@ComponentScan(basePackages = { "org.phoebus.olog" })
+@ComponentScan(basePackages = { "org.phoebus.olog" , "org.phoebus.old.olog" })
 public class OlogDataMigrationApplication implements CommandLineRunner
 {
     static final Logger logger = Logger.getLogger("Olog-Migration");
