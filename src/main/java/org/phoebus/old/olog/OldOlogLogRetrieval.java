@@ -48,18 +48,17 @@ import java.util.stream.Collectors;
 public class OldOlogLogRetrieval implements LogRetrieval
 {
     private WebResource service;
-
-    private String olog_url="https://olog-acc.nsls2.bnl.gov/";
-
+    private String olog_url="https://localhost:8181/";
     private URI ologURI;
 
     public static ObjectMapper logEntryDeserializer = new ObjectMapper().registerModule(new JavaTimeModule());
+    public static OldOlogConfig oldOlogConfig = new OldOlogConfig();
 
     public OldOlogLogRetrieval()
     {
 
-        System.out.println("creating old olog retrieval: " + olog_url);
-        this.ologURI = URI.create(olog_url);
+        System.out.println("creating old olog retrieval: " + oldOlogConfig.getPropertyValue("olog_url", olog_url));
+        this.ologURI = URI.create(oldOlogConfig.getPropertyValue("olog_url", olog_url));
 
         DefaultClientConfig clientConfig = new DefaultClientConfig();
         clientConfig.getClasses().add(MultiPartWriter.class);
