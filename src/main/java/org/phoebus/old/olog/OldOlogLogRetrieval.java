@@ -160,7 +160,7 @@ public class OldOlogLogRetrieval implements LogRetrieval
             String logString = service.path("Olog/resources/logs").queryParams(map).accept(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON).get(String.class);
 
-            logString = logString.replace("log", "logs");
+            logString = logString.replace("log", "logs").replace("logsbooks","logbooks");
             System.out.println(logString);
 
 //            XmlLog[] tst = logEntryDeserializer.readValue(logString, XmlLog[].class);
