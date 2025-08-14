@@ -19,10 +19,6 @@ import org.phoebus.olog.entity.Logbook;
 import org.phoebus.olog.entity.Property;
 import org.phoebus.olog.entity.State;
 import org.phoebus.olog.entity.Tag;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.PropertySource;
 import org.springframework.core.io.InputStreamResource;
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
@@ -43,6 +39,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class OldOlogLogRetrieval implements LogRetrieval
@@ -54,10 +52,12 @@ public class OldOlogLogRetrieval implements LogRetrieval
     public static ObjectMapper logEntryDeserializer = new ObjectMapper().registerModule(new JavaTimeModule());
     public static OldOlogConfig oldOlogConfig = new OldOlogConfig();
 
+    public static Logger oldOlogLogger = Logger.getLogger(OldOlogLogRetrieval.class.getName());
+
     public OldOlogLogRetrieval()
     {
 
-        System.out.println("creating old olog retrieval: " + oldOlogConfig.getPropertyValue("olog_url", olog_url));
+        oldOlogLogger.log(Level.INFO, "creating old olog retrieval: " + oldOlogConfig.getPropertyValue("olog_url", olog_url));
         this.ologURI = URI.create(oldOlogConfig.getPropertyValue("olog_url", olog_url));
 
         DefaultClientConfig clientConfig = new DefaultClientConfig();
@@ -79,7 +79,7 @@ public class OldOlogLogRetrieval implements LogRetrieval
             return allXmlTags.getTags().stream().map((xmlTag) -> new Tag(xmlTag.getName(),
                     xmlTag.getState().equalsIgnoreCase("Active") ? State.Active : State.Inactive)).collect(Collectors.toList());
         } catch (Exception e) {
-            System.out.println(e.getMessage());
+            oldOlogLogger.log(Level.SEVERE, e.getMessage());
         }
         return Collections.emptyList();
     }
@@ -160,21 +160,22 @@ public class OldOlogLogRetrieval implements LogRetrieval
             String logString = service.path("Olog/resources/logs").queryParams(map).accept(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON).get(String.class);
 
-            logString = logString.replace("log", "logs").replace("logsbooks","logbooks");
-            System.out.println(logString);
+//            logString = logString.replace("log", "logs").replace("logsbooks","logbooks");
+//            System.out.println(logString);
 
 //            XmlLog[] tst = logEntryDeserializer.readValue(logString, XmlLog[].class);
 
             List<XmlLog> xmlLogs =
                     logEntryDeserializer.readValue(logString, new TypeReference<List<XmlLog>>() { });
-            System.out.println(xmlLogs.size());
+            oldOlogLogger.log(Level.INFO, String.valueOf(xmlLogs.size()));
 
             xmlLogs.stream().forEach(l -> {
-                System.out.println(l);
+                oldOlogLogger.log(Level.FINE, l.toString());
             });
 
             List<Log> logs = new ArrayList<Log>();
             logs = xmlLogs.stream().map((xmlLog) -> {
+
                         LogBuilder log = Log.LogBuilder.createLog(xmlLog.getDescription());
                         log.id(xmlLog.getId());
                         if (xmlLog.getLevel() != null && !xmlLog.getLevel().isBlank())
@@ -183,6 +184,9 @@ public class OldOlogLogRetrieval implements LogRetrieval
                             log.createDate(xmlLog.getCreatedDate().toInstant());
                         if (xmlLog.getOwner() != null)
                             log.owner(xmlLog.getOwner());
+                        if (xmlLog.getSource() == null) { // to work with old clients where the source is sent in description field.
+                            log.source(xmlLog.getDescription());
+                        }
 
                         // map attachments
                         if (xmlLog.getXmlAttachments() != null && !xmlLog.getXmlAttachments().isEmpty())

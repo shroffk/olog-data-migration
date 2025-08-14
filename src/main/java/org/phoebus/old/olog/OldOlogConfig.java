@@ -3,6 +3,9 @@ package org.phoebus.old.olog;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
+import java.util.logging.Level;
+
+import static org.phoebus.old.olog.OldOlogLogRetrieval.oldOlogLogger;
 
 public class OldOlogConfig {
 
@@ -13,7 +16,7 @@ public class OldOlogConfig {
         if (configPath == null) {
             try (InputStream input = OldOlogConfig.class.getResourceAsStream("/old_olog.properties")) {
                 if (input == null) {
-                    System.out.println("Sorry, unable to find config.properties");
+                    oldOlogLogger.log(Level.WARNING, "Sorry, unable to find config.properties");
                     return;
                 }
                 properties.load(input);
@@ -23,7 +26,7 @@ public class OldOlogConfig {
         } else {
             try (InputStream input = OldOlogConfig.class.getResourceAsStream("/old_olog.properties")) {
                 if (input == null) {
-                    System.err.println("Could not find /old_olog.properties in classpath");
+                    oldOlogLogger.log(Level.SEVERE, "Could not find /old_olog.properties in classpath");
                     return;
                 }
                 properties.load(input);

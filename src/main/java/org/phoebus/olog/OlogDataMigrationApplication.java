@@ -28,8 +28,7 @@ public class OlogDataMigrationApplication implements CommandLineRunner
     {
         logger.info("Starting Olog Service");
         ConfigurableApplicationContext olog = SpringApplication.run(OlogDataMigrationApplication.class, args);
-        System.out.println("starting olog migration");
-        System.out.println("started olog migration");
+        logger.info("started olog migration");
     }
 
     @Bean

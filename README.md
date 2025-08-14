@@ -10,6 +10,12 @@ migration of data to the new Phoebus Olog service
 
 `java -jar target/olog-data-migration-2.0.0-spring-boot.jar`
 
+example:
+
+We can use properties files to configure the URL and other cobnfiguration details on where to retrive logs and where to 
+write them.
+
+`java -Dold_olog.properties=old_olog.properties -Dspring.config.location=olog.properties -jar olog-data-migration-2.0.0-spring-boot.jar`
 
 ## Data Migration
 
